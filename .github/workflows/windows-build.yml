@@ -5,10 +5,12 @@ on:
     branches:
       - develop
       - feature/menkia-mod-manager-hud
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   windows-x64:
@@ -60,9 +62,16 @@ jobs:
         shell: msys2 {0}
         run: cmake --install build
 
-      - name: Upload Windows x64 build
-        uses: actions/upload-artifact@v4
+      - name: Create release ZIP
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist/*" -DestinationPath "MENKIA-Windows-x64.zip" -CompressionLevel Optimal
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
         with:
-          name: MENKIA-Windows-x64
-          path: dist/
-          if-no-files-found: error
+          name: MENKIA ${{ github.ref_name }}
+          generate_release_notes: true
+          files: MENKIA-Windows-x64.zip
