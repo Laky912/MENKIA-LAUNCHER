@@ -208,7 +208,6 @@ void MenkiaModsPage::requestCompatibleVersion(const QString &projectId)
     request.setRawHeader("User-Agent", "MENKIA-Client/1.0 (https://github.com/Laky912/MENKIA-LAUNCHER)");
     m_activeReply = m_network.get(request);
     m_activeReply->setProperty("menkia_stage", "versions");
-    m_pendingProjectId = projectId.toUtf8();
     setStatus(tr("Comprobando versiones, loader y archivos compatibles..."));
 }
 
