@@ -8,6 +8,7 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QNetworkReply>
+#include <QUrl>
 #include "ui/pages/BasePage.h"
 
 class MinecraftInstance;
@@ -53,7 +54,6 @@ private:
     QTreeWidget *m_results = nullptr;
     QLabel *m_status = nullptr;
     QPushButton *m_install = nullptr;
-    QByteArray m_pendingProjectId;
     QString m_pendingFilename;
     QUrl m_pendingDownload;
     QNetworkReply *m_activeReply = nullptr;
