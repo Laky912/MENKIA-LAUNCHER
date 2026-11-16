@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - develop
+      - feature/menkia-mod-manager-hud
   workflow_dispatch:
 
 permissions:
