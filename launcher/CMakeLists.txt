@@ -794,6 +794,8 @@ SET(LAUNCHER_SOURCES
     ui/pages/instance/ShaderPackPage.h
     ui/pages/instance/ModFolderPage.cpp
     ui/pages/instance/ModFolderPage.h
+    ui/pages/instance/MenkiaModsPage.cpp
+    ui/pages/instance/MenkiaModsPage.h
     ui/pages/instance/NotesPage.cpp
     ui/pages/instance/NotesPage.h
     ui/pages/instance/LogPage.cpp
