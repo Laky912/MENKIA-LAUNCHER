@@ -21,3 +21,13 @@ Sodium and VulkanMod are alternative renderers and must not be installed togethe
 - Only HTTPS primary JAR files are accepted.
 - The manager does not silently install required dependencies or resolve mod conflicts yet. Review the project's dependency metadata and compatibility notes before launching.
 - TPS HUD values require server-side data or a mod that can obtain them; a client-only launcher cannot infer authoritative server TPS.
+
+## Additional installation safeguards
+
+- The loader is detected from the instance profile and cannot be overridden in the mod browser. Instances without a recognized Forge, Fabric, Quilt or NeoForge component cannot install loader-dependent mods.
+- Search and version resolution are constrained to the detected loader and Minecraft version; selected release metadata is checked again before download.
+- A primary JAR must have a Modrinth SHA-512 hash. MENKIA verifies it before writing the file.
+- Downloads larger than 100 MiB are rejected, and an existing JAR requires explicit replacement confirmation.
+- Releases declaring required dependencies are not installed automatically; install and verify those dependencies separately first.
+- Submodule fetch URLs remain unchanged, but push URLs are omitted so routine pushes cannot be redirected to MultiMC.
+- CI uses read-only repository permissions for builds; write permission is scoped to tagged-release publishing.
