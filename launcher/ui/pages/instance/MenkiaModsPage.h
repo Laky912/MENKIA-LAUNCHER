@@ -45,7 +45,7 @@ private:
     QString minecraftVersion() const;
     QString loaderId() const;
     void requestCompatibleVersion(const QString &projectId);
-    void downloadFile(const QUrl &url, const QString &filename);
+    void downloadFile(const QUrl &url, const QString &filename, const QString &sha512);
 
     MinecraftInstance *m_instance = nullptr;
     QNetworkAccessManager m_network;
@@ -55,6 +55,7 @@ private:
     QLabel *m_status = nullptr;
     QPushButton *m_install = nullptr;
     QString m_pendingFilename;
+    QString m_pendingSha512;
     QUrl m_pendingDownload;
     QNetworkReply *m_activeReply = nullptr;
 };
