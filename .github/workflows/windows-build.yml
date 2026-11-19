@@ -5,6 +5,7 @@ on:
     branches:
       - develop
       - feature/menkia-mod-manager-hud
+      - fix/mod-manager-security-compat
     tags:
       - 'v*'
   workflow_dispatch:
@@ -67,10 +68,26 @@ jobs:
         run: |
           Compress-Archive -Path "dist/*" -DestinationPath "MENKIA-Windows-x64.zip" -CompressionLevel Optimal
 
-      - name: Publish GitHub Release
+      - name: Upload release package
         if: startsWith(github.ref, 'refs/tags/v')
-        permissions:
-          contents: write
+        uses: actions/upload-artifact@v4
+        with:
+          name: MENKIA-Windows-x64
+          path: MENKIA-Windows-x64.zip
+          if-no-files-found: error
+
+  publish-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: windows-x64
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download release package
+        uses: actions/download-artifact@v4
+        with:
+          name: MENKIA-Windows-x64
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: MENKIA ${{ github.ref_name }}
