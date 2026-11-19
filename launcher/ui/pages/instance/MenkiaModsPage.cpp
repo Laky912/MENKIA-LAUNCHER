@@ -18,6 +18,7 @@
 #include <QDesktopServices>
 #include <QNetworkRequest>
 #include <QNetworkReply>
+#include <QCryptographicHash>
 
 MenkiaModsPage::MenkiaModsPage(MinecraftInstance *instance, QWidget *parent)
     : QMainWindow(parent), m_instance(instance), m_network(this)
@@ -31,11 +32,11 @@ MenkiaModsPage::MenkiaModsPage(MinecraftInstance *instance, QWidget *parent)
     toolbar->addWidget(m_search, 1);
 
     m_loader = new QComboBox(root);
-    m_loader->addItem(tr("Detectar loader"), QString());
-    m_loader->addItem("Forge", "forge");
-    m_loader->addItem("Fabric", "fabric");
-    m_loader->addItem("Quilt", "quilt");
-    m_loader->addItem("NeoForge", "neoforge");
+    const QString detectedLoader = loaderId();
+    if (detectedLoader.isEmpty()) m_loader->addItem(tr("Sin loader compatible detectado"), QString());
+    else m_loader->addItem(detectedLoader, detectedLoader);
+    m_loader->setEnabled(false);
+    m_loader->setToolTip(tr("El loader se detecta desde la configuración real de esta instancia."));
     toolbar->addWidget(m_loader);
 
     auto *searchButton = new QPushButton(tr("Buscar"), root);
@@ -106,8 +107,6 @@ QString MenkiaModsPage::minecraftVersion() const
 
 QString MenkiaModsPage::loaderId() const
 {
-    const QString selected = m_loader->currentData().toString();
-    if (!selected.isEmpty()) return selected;
     auto profile = m_instance ? m_instance->getPackProfile() : nullptr;
     if (!profile) return QString();
     if (profile->getComponent("net.fabricmc.fabric-loader")) return "fabric";
@@ -146,7 +145,11 @@ void MenkiaModsPage::search()
     query.addQueryItem("query", m_search->text().trimmed());
     query.addQueryItem("limit", "50");
     query.addQueryItem("index", "relevance");
-    query.addQueryItem("facets", QString("[[\"project_type:mod\"],[\"versions:%1\"]]").arg(version));
+    QString facets = QString(R"([["project_type:mod"],["versions:%1"]])").arg(version);
+    const QString detectedLoader = loaderId();
+    if (!detectedLoader.isEmpty())
+        facets = QString(R"([["project_type:mod"],["versions:%1"],["categories:%2"]])").arg(version, detectedLoader);
+    query.addQueryItem("facets", facets);
     url.setQuery(query);
     QNetworkRequest request(url);
     request.setRawHeader("User-Agent", "MENKIA-Client/1.0 (https://github.com/Laky912/MENKIA-LAUNCHER)");
@@ -162,9 +165,10 @@ void MenkiaModsPage::onSearchFinished()
     if (!reply) return;
     const auto error = reply->error();
     const QByteArray data = reply->readAll();
+    const QString errorText = reply->errorString();
     reply->deleteLater();
     if (error != QNetworkReply::NoError) {
-        setStatus(tr("Error al consultar Modrinth: %1").arg(reply->errorString()));
+        setStatus(tr("Error al consultar Modrinth: %1").arg(errorText));
         return;
     }
     QJsonParseError parseError;
@@ -202,7 +206,11 @@ void MenkiaModsPage::requestCompatibleVersion(const QString &projectId)
     QUrlQuery query;
     query.addQueryItem("game_versions", QString("[\"%1\"]").arg(minecraftVersion()));
     const QString loader = loaderId();
-    if (!loader.isEmpty()) query.addQueryItem("loaders", QString("[\"%1\"]").arg(loader));
+    if (loader.isEmpty()) {
+        setStatus(tr("No se instalarán mods: esta instancia no tiene un loader compatible detectado. Instala Forge, Fabric, Quilt o NeoForge primero."));
+        return;
+    }
+    query.addQueryItem("loaders", QString(R"(["%1"])").arg(loader));
     url.setQuery(query);
     QNetworkRequest request(url);
     request.setRawHeader("User-Agent", "MENKIA-Client/1.0 (https://github.com/Laky912/MENKIA-LAUNCHER)");
@@ -227,15 +235,27 @@ void MenkiaModsPage::onVersionsFinished()
     const auto versions = QJsonDocument::fromJson(data).array();
     for (const auto &versionValue : versions) {
         const auto version = versionValue.toObject();
+        bool gameCompatible = false, loaderCompatible = false;
+        for (const auto &v : version.value("game_versions").toArray()) if (v.toString() == minecraftVersion()) gameCompatible = true;
+        for (const auto &v : version.value("loaders").toArray()) if (v.toString() == loaderId()) loaderCompatible = true;
+        if (!gameCompatible || !loaderCompatible) continue;
+        for (const auto &dependency : version.value("dependencies").toArray()) {
+            if (dependency.toObject().value("dependency_type").toString() == "required") {
+                setStatus(tr("Este mod declara dependencias obligatorias. Instálalas manualmente desde Modrinth antes de usarlo."));
+                return;
+            }
+        }
         const auto files = version.value("files").toArray();
         for (const auto &fileValue : files) {
             const auto file = fileValue.toObject();
             if (!file.value("primary").toBool()) continue;
-            const QString filename = QFileInfo(file.value("filename").toString()).fileName();
+            const QString suppliedName = file.value("filename").toString();
+            const QString filename = QFileInfo(suppliedName).fileName();
+            const QString sha512 = file.value("hashes").toObject().value("sha512").toString().toLower();
             const QUrl download(file.value("url").toString());
-            if (filename.endsWith(".jar", Qt::CaseInsensitive) && download.isValid()
-                && download.scheme() == "https") {
-                downloadFile(download, filename);
+            if (filename == suppliedName && filename.endsWith(".jar", Qt::CaseInsensitive)
+                && !sha512.isEmpty() && download.isValid() && download.scheme() == "https") {
+                downloadFile(download, filename, sha512);
                 return;
             }
         }
@@ -243,15 +263,23 @@ void MenkiaModsPage::onVersionsFinished()
     setStatus(tr("No existe una versión instalable para esta combinación de Minecraft y loader."));
 }
 
-void MenkiaModsPage::downloadFile(const QUrl &url, const QString &filename)
+void MenkiaModsPage::downloadFile(const QUrl &url, const QString &filename, const QString &sha512)
 {
     QNetworkRequest request(url);
     request.setRawHeader("User-Agent", "MENKIA-Client/1.0");
+    request.setAttribute(QNetworkRequest::FollowRedirectsAttribute, true);
     m_pendingFilename = filename;
+    m_pendingSha512 = sha512;
     m_pendingDownload = url;
     m_activeReply = m_network.get(request);
     m_activeReply->setProperty("menkia_stage", "download");
-    setStatus(tr("Descargando %1...").arg(filename));
+    connect(m_activeReply, &QNetworkReply::downloadProgress, this, [this](qint64 received, qint64) {
+        if (received > 100LL * 1024LL * 1024LL && m_activeReply) {
+            m_activeReply->abort();
+            setStatus(tr("Descarga cancelada: el archivo supera el límite de 100 MiB."));
+        }
+    });
+    setStatus(tr("Descargando %1 (máximo 100 MiB)...").arg(filename));
 }
 
 void MenkiaModsPage::onDownloadFinished()
@@ -267,6 +295,15 @@ void MenkiaModsPage::onDownloadFinished()
         setStatus(tr("Falló la descarga: %1").arg(errorText));
         return;
     }
+    if (bytes.size() > 100LL * 1024LL * 1024LL) {
+        setStatus(tr("Descarga rechazada: supera el límite de 100 MiB."));
+        return;
+    }
+    const QByteArray actualHash = QCryptographicHash::hash(bytes, QCryptographicHash::Sha512).toHex();
+    if (QString::fromLatin1(actualHash) != m_pendingSha512) {
+        setStatus(tr("Descarga rechazada: la verificación SHA-512 no coincide con Modrinth."));
+        return;
+    }
     if (!m_instance || m_instance->isRunning()) {
         setStatus(tr("Cierra Minecraft antes de instalar mods."));
         return;
@@ -277,6 +314,15 @@ void MenkiaModsPage::onDownloadFinished()
         return;
     }
     const QString target = modsDir.filePath(m_pendingFilename);
+    if (QFileInfo::exists(target)) {
+        const auto answer = QMessageBox::question(this, tr("Reemplazar mod"),
+            tr("Ya existe %1 en esta instancia. ¿Quieres reemplazarlo?").arg(m_pendingFilename),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (answer != QMessageBox::Yes) {
+            setStatus(tr("Instalación cancelada; el archivo existente se conservó."));
+            return;
+        }
+    }
     QSaveFile output(target);
     if (!output.open(QIODevice::WriteOnly) || output.write(bytes) != bytes.size() || !output.commit()) {
         setStatus(tr("No se pudo guardar el mod en la instancia."));
