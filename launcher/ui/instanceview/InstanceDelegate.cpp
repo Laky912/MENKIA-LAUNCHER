@@ -24,8 +24,11 @@
 #include "InstanceView.h"
 #include "BaseInstance.h"
 #include "InstanceList.h"
+#include "icons/IconUtils.h"
 #include <xdgicon.h>
 #include <QTextEdit>
+#include <QResizeEvent>
+#include <QTextDocument>
 
 // Origin: Qt
 static void viewItemTextLayout(QTextLayout &textLayout, int lineWidth, qreal &height,
@@ -143,14 +146,10 @@ void drawProgressOverlay(QPainter *painter, const QStyleOptionViewItem &option,
     painter->restore();
 }
 
-// The instance's badges (running or broken, an update), as KDE draws icon overlays: a third of
-// the icon's size, each in a corner of it, sticking out a little into the space around it:
-// bottom left first, then bottom right, top right, top left (mirrored right to left).
-// iconRect: the square the icon is fit in.
-void drawBadges(QPainter *painter, const QRect &iconRect, int iconSize, Qt::LayoutDirection direction, BaseInstance *instance,
-                QIcon::Mode mode, QIcon::State state)
+// An instance's badges: running or broken, an update
+QStringList instanceBadges(BaseInstance *instance)
 {
-    QList<QString> badges;
+    QStringList badges;
     if (instance->isRunning())
     {
         badges.append("status-running");
@@ -163,7 +162,16 @@ void drawBadges(QPainter *painter, const QRect &iconRect, int iconSize, Qt::Layo
     {
         badges.append("checkupdate");
     }
+    return badges;
+}
 
+// Badges (theme icon names), as KDE draws icon overlays: a third of the icon's size, each in a
+// corner of it, sticking out a little into the space around it: bottom left first, then bottom
+// right, top right, top left (mirrored right to left).
+// iconRect: the square the icon is fit in.
+void drawBadges(QPainter *painter, const QRect &iconRect, int iconSize, Qt::LayoutDirection direction, const QStringList &badges,
+                QIcon::Mode mode, QIcon::State state)
+{
     const int side = qMax(12, iconSize / 3);
     // how far out of the icon: a quarter of a badge, but not over the name below it or past the
     // item's edge above it
@@ -257,16 +265,14 @@ void ListViewDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
         mode = QIcon::Disabled;
     QIcon::State state = opt.state & QStyle::State_Open ? QIcon::On : QIcon::Off;
 
-    // the icon, as big as asked: QIcon only scales its images down, so a small one (most
-    // instance icons are 32 to 128 pixels) is scaled up here, smoothly
+    // the icon, fit to the square (IconUtils::fitted)
     {
         iconbox.setHeight(iconSize);
-        const QSize wanted(iconSize, iconSize);
-        QPixmap pixmap = opt.icon.pixmap(wanted, mode, state);
+        const qreal ratio = painter->device() ? painter->device()->devicePixelRatioF() : 1.0;
+        const QPixmap pixmap = IconUtils::fitted(opt.icon, QSize(iconSize, iconSize), ratio, mode, state);
         if (!pixmap.isNull())
         {
-            const QSize shown = (pixmap.size() / pixmap.devicePixelRatio()).scaled(wanted, Qt::KeepAspectRatio);
-            painter->setRenderHint(QPainter::SmoothPixmapTransform);
+            const QSize shown = pixmap.size() / pixmap.devicePixelRatio();
             painter->drawPixmap(QStyle::alignedRect(opt.direction, Qt::AlignCenter, shown, iconbox), pixmap);
         }
     }
@@ -286,14 +292,16 @@ void ListViewDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
         line.draw(painter, position);
     }
 
-    // the badges (running, crashed, update) on the icon's bottom corner
-    // FIXME: this really has no business of being here. Make generic.
+    // the badges on the icon's corners: an instance's (running, crashed, update), or what the
+    // model gives (the default icon's check mark in the icon picker)
+    // FIXME: instances could give theirs through BadgesRole too
     auto instance = (BaseInstance*)index.data(InstanceList::InstancePointerRole)
             .value<void *>();
-    if (instance)
+    const QStringList badges = instance ? instanceBadges(instance) : index.data(InstanceViewRoles::BadgesRole).toStringList();
+    if (!badges.isEmpty())
     {
         // on the square the icon is fit in, so they're in the same places on every item
-        drawBadges(painter, QStyle::alignedRect(opt.direction, Qt::AlignCenter, QSize(iconSize, iconSize), iconbox), iconSize, opt.direction, instance, mode, state);
+        drawBadges(painter, QStyle::alignedRect(opt.direction, Qt::AlignCenter, QSize(iconSize, iconSize), iconbox), iconSize, opt.direction, badges, mode, state);
     }
 
     // the progress of a launch or an update, over all of it
@@ -328,6 +336,30 @@ public:
         setTextInteractionFlags(Qt::TextEditorInteraction);
         setHorizontalScrollBarPolicy(Qt::ScrollBarPolicy::ScrollBarAlwaysOff);
         setVerticalScrollBarPolicy(Qt::ScrollBarPolicy::ScrollBarAlwaysOff);
+        // the text where the name was, wrapped the same: no margin inside the field's frame
+        // (the delegate places it), and as tall as the text, so nothing scrolls out of sight
+        document()->setDocumentMargin(0);
+        connect(document(), &QTextDocument::contentsChanged, this, &NoReturnTextEdit::fitHeight);
+    }
+    /// At least as tall as the name it covers (its lines are a little tighter than the item's)
+    void setMinimumTextHeight(int height)
+    {
+        m_minimumTextHeight = height;
+        fitHeight();
+    }
+    /// As tall as its text at its width; it may reach past the item, over the ones below
+    void fitHeight()
+    {
+        document()->setTextWidth(viewport()->width());
+        const int height = qMax(qCeil(document()->size().height()), m_minimumTextHeight) + 2 * frameWidth();
+        if (height != this->height())
+            resize(width(), height);
+    }
+    void resizeEvent(QResizeEvent *event) override
+    {
+        QTextEdit::resizeEvent(event);
+        if (event->size().width() != event->oldSize().width())
+            fitHeight();
     }
     bool event(QEvent * event) override
     {
@@ -350,13 +382,28 @@ public:
     }
 signals:
     void editingDone();
+
+private: /* data */
+    int m_minimumTextHeight = 0;
 };
 
 void ListViewDelegate::updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex& index) const
 {
-    QRect textRect = option.rect;
-    textRect.adjust(PADDING, TOP_PADDING + iconSizeOf(option) + ICON_TEXT_GAP, -PADDING, -PADDING);
-    editor->setGeometry(textRect);
+    // the field's text exactly where the name is drawn (paint()), its frame around that; its
+    // height follows the text (NoReturnTextEdit::fitHeight)
+    auto field = qobject_cast<NoReturnTextEdit *>(editor);
+    QStyle *style = option.widget ? option.widget->style() : QApplication::style();
+    const int textMargin = style->pixelMetric(QStyle::PM_FocusFrameHMargin, 0, option.widget) + 1;
+    const int frame = field ? field->frameWidth() : 0;
+    QRect textRect = option.rect.adjusted(textMargin + PADDING, TOP_PADDING + iconSizeOf(option) + ICON_TEXT_GAP, -textMargin - PADDING, 0);
+    editor->setGeometry(textRect.left() - frame, textRect.top() - frame, textRect.width() + 2 * frame, editor->height());
+    if (field)
+    {
+        // the name as drawn, so none of it shows below the field
+        QStyleOptionViewItem opt = option;
+        opt.text = index.data().toString();
+        field->setMinimumTextHeight(viewItemTextSize(&opt, option.rect.width() - 2 * PADDING).height());
+    }
 }
 
 void ListViewDelegate::setEditorData(QWidget* editor, const QModelIndex& index) const
@@ -384,6 +431,7 @@ void ListViewDelegate::setModelData(QWidget* editor, QAbstractItemModel* model, 
 QWidget * ListViewDelegate::createEditor(QWidget* parent, const QStyleOptionViewItem& option, const QModelIndex& index) const
 {
     auto editor = new NoReturnTextEdit(parent);
+    editor->setFont(option.font);
     connect(editor, &NoReturnTextEdit::editingDone, this, &ListViewDelegate::editingDone);
     return editor;
 }
