@@ -48,6 +48,8 @@ enum class AccountState {
 };
 
 struct AccountData {
+    bool isOfflineAccount = false;
+    QString offlineName;
     QJsonObject saveState() const;
     bool resumeStateFromV3(QJsonObject data);
 
