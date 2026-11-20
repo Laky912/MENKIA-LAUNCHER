@@ -14,6 +14,12 @@ Use the quick searches in the instance page for Performance, Keystrokes, CPS, FP
 
 Sodium and VulkanMod are alternative renderers and must not be installed together. The manager deliberately does not bundle either renderer automatically. Select a compatible project and review its dependencies before launch.
 
+## Local profiles
+
+MENKIA includes a local offline profile option in the Accounts dialog. Create a profile with a 3–16 character Minecraft-style name (letters, numbers and underscores). Profiles are saved in the launcher's account list, can be selected as the default, and launch without Microsoft sign-in. Existing Microsoft account support remains available.
+
+These profiles are not authenticated Microsoft/Minecraft accounts: they do not prove game ownership, provide official skins or capes, or authenticate to online-mode servers. Use them for local play and servers configured for offline authentication only.
+
 ## Current safety limits
 
 - Mods are installed per instance, never globally.
