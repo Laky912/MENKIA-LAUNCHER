@@ -245,6 +245,22 @@ bool AccountData::resumeStateFromV3(QJsonObject data) {
         return false;
     }
     auto typeS = typeV.toString();
+    if(typeS == "Offline") {
+        auto name = data.value("name");
+        auto profileId = data.value("profileId");
+        if(!name.isString() || !profileId.isString() || name.toString().isEmpty() || profileId.toString().isEmpty()) {
+            qWarning() << "Failed to parse local account data.";
+            return false;
+        }
+        isOfflineAccount = true;
+        offlineName = name.toString();
+        minecraftProfile.name = offlineName;
+        minecraftProfile.id = profileId.toString();
+        minecraftProfile.validity = Katabasis::Validity::Assumed;
+        accountState = AccountState::Offline;
+        validity_ = Katabasis::Validity::Assumed;
+        return true;
+    }
     if(typeS != "MSA") {
         qWarning() << "Failed to parse account data: type is not recognized.";
         return false;
@@ -271,6 +287,12 @@ bool AccountData::resumeStateFromV3(QJsonObject data) {
 
 QJsonObject AccountData::saveState() const {
     QJsonObject output;
+    if(isOfflineAccount) {
+        output["type"] = "Offline";
+        output["name"] = offlineName;
+        output["profileId"] = minecraftProfile.id;
+        return output;
+    }
     output["type"] = "MSA";
     tokenToJSONV3(output, msaToken, "msa");
     tokenToJSONV3(output, userToken, "utoken");
