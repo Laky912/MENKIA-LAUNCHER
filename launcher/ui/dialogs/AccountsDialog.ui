@@ -875,6 +875,13 @@ Choose your name carefully:</string>
                </spacer>
               </item>
               <item>
+               <widget class="QPushButton" name="renameLocalProfileButton">
+                <property name="text">
+                 <string>Rename Local Profile</string>
+                </property>
+               </widget>
+              </item>
+              <item>
                <widget class="QPushButton" name="refreshButton_Demo">
                 <property name="text">
                  <string>Refresh Account</string>
