@@ -145,7 +145,7 @@ QModelIndex AccountList::addAccount(const MinecraftAccountPtr account)
     auto xid = account->xid();
     MinecraftAccountPtr existingAccountPtr;
     int existingIndex;
-    if(getAccountByXID(xid, existingAccountPtr, existingIndex)) {
+    if(!xid.isEmpty() && getAccountByXID(xid, existingAccountPtr, existingIndex)) {
         existingAccountPtr->replaceDataWith(account);
         auto modelIndex = index(existingIndex);
         emit dataChanged(modelIndex, modelIndex);
