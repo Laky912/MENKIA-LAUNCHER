@@ -26,6 +26,9 @@
 #include <qrcode/QrCodeGenerator.h>
 #include <QMessageBox>
 #include <QClipboard>
+#include <QInputDialog>
+#include <QGridLayout>
+#include <QRegExp>
 
 constexpr auto selectionFlags = QItemSelectionModel::Clear | QItemSelectionModel::Select | QItemSelectionModel::Rows | QItemSelectionModel::Current;
 
@@ -43,6 +46,40 @@ AccountsDialog::AccountsDialog(QWidget *parent, const QString& internalId) : QDi
     m_accounts = APPLICATION->accounts();
     ui->accountListView->setModel(m_accounts.get());
     ui->accountListView->setIconSize(QSize(48, 48));
+
+    // MENKIA local Alt Manager: offline profiles are stored in the same account list.
+    auto *localAccountButton = new QPushButton(tr("Add local profile"), this);
+    localAccountButton->setToolTip(tr("Create a local player profile without Microsoft authentication."));
+    if(auto *accountLayout = qobject_cast<QGridLayout *>(ui->mainView->layout())) {
+        accountLayout->addWidget(localAccountButton, 3, 0);
+    }
+    connect(localAccountButton, &QPushButton::clicked, this, [this]() {
+        bool accepted = false;
+        const QString name = QInputDialog::getText(this, tr("New local profile"),
+            tr("Player name (3–16 letters, numbers or underscores):"),
+            QLineEdit::Normal, QString(), &accepted).trimmed();
+        if(!accepted) return;
+        static const QRegExp validName("[A-Za-z0-9_]{3,16}");
+        if(!validName.exactMatch(name)) {
+            QMessageBox::warning(this, tr("Invalid player name"),
+                tr("Use 3–16 characters: A–Z, a–z, 0–9 or underscore."));
+            return;
+        }
+        MinecraftAccountPtr existing;
+        int existingRow = -1;
+        if(m_accounts->getAccountByProfileName(name, existing, existingRow)) {
+            ui->accountListView->selectionModel()->select(m_accounts->index(existingRow), selectionFlags);
+            m_accounts->setDefaultAccount(existing);
+            updateStates();
+            return;
+        }
+        auto localAccount = MinecraftAccount::createOfflineAccount(name);
+        if(!localAccount) return;
+        const QModelIndex added = m_accounts->addAccount(localAccount);
+        m_accounts->setDefaultAccount(localAccount);
+        ui->accountListView->selectionModel()->select(added, selectionFlags);
+        updateStates();
+    });
     m_capesModel = new CapesModel(this);
     ui->capesView->setModel(m_capesModel);
     m_skinsModel = APPLICATION->skinsModel().get();
@@ -72,6 +109,43 @@ AccountsDialog::AccountsDialog(QWidget *parent, const QString& internalId) : QDi
     connect(ui->signOutButton_Demo, &QPushButton::clicked, [&](bool on) {
         qDebug() << "Demo Sign Out button clicked";
         onSignOutButtonClicked(on);
+    });
+
+    connect(ui->renameLocalProfileButton, &QPushButton::clicked, this, [this]() {
+        if(!m_currentAccount || !m_currentAccount->isOfflineAccount()) {
+            return;
+        }
+        bool accepted = false;
+        const QString name = QInputDialog::getText(this, tr("Rename local profile"),
+            tr("New player name (3–16 letters, numbers or underscores):"),
+            QLineEdit::Normal, m_currentAccount->profileName(), &accepted).trimmed();
+        if(!accepted || name == m_currentAccount->profileName()) {
+            return;
+        }
+        static const QRegExp validName("[A-Za-z0-9_]{3,16}");
+        if(!validName.exactMatch(name)) {
+            QMessageBox::warning(this, tr("Invalid player name"),
+                tr("Use 3–16 characters: A–Z, a–z, 0–9 or underscore."));
+            return;
+        }
+        MinecraftAccountPtr existing;
+        int existingRow = -1;
+        if(m_accounts->getAccountByProfileName(name, existing, existingRow) && existing != m_currentAccount) {
+            QMessageBox::warning(this, tr("Name already in use"),
+                tr("Another account already uses this player name."));
+            return;
+        }
+        const auto answer = QMessageBox::question(this, tr("Rename local profile"),
+            tr("The local profile UUID will be preserved to keep its local identity. Offline-mode servers may assign a different player identity after a nickname change. Continue?"),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if(answer != QMessageBox::Yes) {
+            return;
+        }
+        auto *accountData = m_currentAccount->accountData();
+        accountData->offlineName = name;
+        accountData->minecraftProfile.name = name;
+        emit m_currentAccount->changed();
+        updateStates();
     });
     connect(ui->signOutButton_Expired, &QPushButton::clicked, [&](bool on) {
         qDebug() << "Expired Sign Out button clicked";
@@ -395,6 +469,19 @@ void AccountsDialog::updateStates()
         }
         return;
     }
+
+    if(m_currentAccount->isOfflineAccount()) {
+        ui->accountPageStack->setCurrentWidget(ui->demoPage);
+        ui->selectedAccountLabel_Demo->setText(m_currentAccount->profileName() + tr(" — Local profile"));
+        ui->selectedAccountIconLabel_Demo->setIcon(APPLICATION->getThemedIcon("noaccount"));
+        ui->getMinecraftButton->setVisible(false);
+        ui->refreshButton_Demo->setVisible(false);
+        ui->renameLocalProfileButton->setVisible(true);
+        return;
+    }
+    ui->getMinecraftButton->setVisible(true);
+    ui->refreshButton_Demo->setVisible(true);
+    ui->renameLocalProfileButton->setVisible(false);
 
     if(m_currentAccount->accountState() == AccountState::Expired)
     {

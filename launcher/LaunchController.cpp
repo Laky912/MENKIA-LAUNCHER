@@ -126,7 +126,12 @@ void LaunchController::login() {
         switch(m_accountToUse->accountState()) {
             case AccountState::Offline: {
                 m_session->wants_online = false;
-                // NOTE: fallthrough is intentional
+                if(m_accountToUse->isOfflineAccount()) {
+                    m_session->MakeOffline(m_accountToUse->profileName());
+                    launchInstance();
+                    return;
+                }
+                // NOTE: fallthrough is intentional for authenticated accounts used offline
             }
             case AccountState::Online: {
                 if(!m_session->wants_online) {

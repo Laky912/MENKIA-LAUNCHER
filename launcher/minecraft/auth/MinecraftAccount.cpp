@@ -18,6 +18,7 @@
 #include "MinecraftAccount.h"
 
 #include <QUuid>
+#include <QCryptographicHash>
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QRegExp>
@@ -54,6 +55,27 @@ MinecraftAccountPtr MinecraftAccount::createBlankMSA()
     return account;
 }
 
+MinecraftAccountPtr MinecraftAccount::createOfflineAccount(const QString &playerName)
+{
+    static const QRegExp validName("[A-Za-z0-9_]{3,16}");
+    if(!validName.exactMatch(playerName)) {
+        return nullptr;
+    }
+    MinecraftAccountPtr account(new MinecraftAccount());
+    account->data.isOfflineAccount = true;
+    account->data.offlineName = playerName;
+    account->data.minecraftProfile.name = playerName;
+    QByteArray uuidBytes = QCryptographicHash::hash(
+        QString("OfflinePlayer:%1").arg(playerName).toUtf8(), QCryptographicHash::Md5);
+    uuidBytes[6] = char((uuidBytes[6] & 0x0f) | 0x30);
+    uuidBytes[8] = char((uuidBytes[8] & 0x3f) | 0x80);
+    account->data.minecraftProfile.id = QUuid::fromRfc4122(uuidBytes).toString().remove(QRegExp("[{}-]"));
+    account->data.minecraftProfile.validity = Katabasis::Validity::Assumed;
+    account->data.accountState = AccountState::Offline;
+    account->data.validity_ = Katabasis::Validity::Assumed;
+    return account;
+}
+
 
 QJsonObject MinecraftAccount::saveToJson() const
 {
@@ -61,7 +83,7 @@ QJsonObject MinecraftAccount::saveToJson() const
 }
 
 AccountState MinecraftAccount::accountState() const {
-    return data.accountState;
+    return data.isOfflineAccount ? AccountState::Offline : data.accountState;
 }
 
 QString MinecraftAccount::accountStateText() const
@@ -241,6 +263,9 @@ bool MinecraftAccount::isActive() const {
 }
 
 bool MinecraftAccount::shouldRefresh() const {
+    if(data.isOfflineAccount) {
+        return false;
+    }
     /*
      * Never refresh accounts that are being used by the game, it breaks the game session.
      * Always refresh accounts that have not been refreshed yet during this session.
@@ -276,6 +301,17 @@ bool MinecraftAccount::shouldRefresh() const {
 
 void MinecraftAccount::fillSession(AuthSessionPtr session)
 {
+    if(data.isOfflineAccount) {
+        session->wants_online = false;
+        session->status = AuthSession::PlayableOffline;
+        session->username = data.offlineName;
+        session->player_name = data.offlineName;
+        session->uuid = data.minecraftProfile.id;
+        session->user_type = "offline";
+        session->access_token.clear();
+        session->session = "-";
+        return;
+    }
     if(ownsMinecraft() && !hasProfile()) {
         session->status = AuthSession::RequiresProfileSetup;
     }
