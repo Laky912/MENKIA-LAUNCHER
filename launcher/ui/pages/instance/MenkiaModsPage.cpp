@@ -157,6 +157,7 @@ void MenkiaModsPage::search()
     query.addQueryItem("facets", facets);
     url.setQuery(query);
     QNetworkRequest request(url);
+    request.setTransferTimeout(60000);
     request.setRawHeader("User-Agent", "MENKIA-Client/1.0 (https://github.com/Laky912/MENKIA-LAUNCHER)");
     m_activeReply = m_network.get(request);
     m_activeReply->setProperty("menkia_stage", "search");
@@ -224,6 +225,7 @@ void MenkiaModsPage::requestCompatibleVersion(const QString &projectId)
     query.addQueryItem("loaders", QString(R"(["%1"])").arg(loader));
     url.setQuery(query);
     QNetworkRequest request(url);
+    request.setTransferTimeout(60000);
     request.setRawHeader("User-Agent", "MENKIA-Client/1.0 (https://github.com/Laky912/MENKIA-LAUNCHER)");
     m_activeReply = m_network.get(request);
     m_activeReply->setProperty("menkia_stage", "versions");
@@ -277,6 +279,7 @@ void MenkiaModsPage::onVersionsFinished()
 void MenkiaModsPage::downloadFile(const QUrl &url, const QString &filename, const QString &sha512)
 {
     QNetworkRequest request(url);
+    request.setTransferTimeout(60000);
     request.setRawHeader("User-Agent", "MENKIA-Client/1.0");
     request.setAttribute(QNetworkRequest::FollowRedirectsAttribute, true);
     m_pendingFilename = filename;
