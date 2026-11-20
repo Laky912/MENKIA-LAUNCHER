@@ -49,7 +49,8 @@ jobs:
               -o /tmp/qt5-svg.pkg.tar.zst \
               "https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-qt5-svg-5.15.19%2Bkde%2Br5-1-any.pkg.tar.zst"
             echo "7e7859ddd92ce65ad38c8ea2ab2917d33a211ce2cff43207f7cadc15c99a2d3e  /tmp/qt5-svg.pkg.tar.zst" | sha256sum -c -
-            pacman -U --noconfirm --nosignature /tmp/qt5-svg.pkg.tar.zst
+            sed 's/^SigLevel.*/SigLevel = Never/' /etc/pacman.conf > /tmp/pacman-unsigned.conf
+            pacman --config /tmp/pacman-unsigned.conf -U --noconfirm /tmp/qt5-svg.pkg.tar.zst
           fi
 
       - name: Configure MENKIA
