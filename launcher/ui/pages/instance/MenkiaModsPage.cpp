@@ -299,9 +299,14 @@ void MenkiaModsPage::onDownloadFinished()
     m_activeReply = nullptr;
     if (!reply) return;
     const auto error = reply->error();
+    const QUrl finalUrl = reply->url();
     const QByteArray bytes = reply->readAll();
     const QString errorText = reply->errorString();
     reply->deleteLater();
+    if (finalUrl.scheme() != "https") {
+        setStatus(tr("Descarga rechazada: la URL final dejó de usar HTTPS."));
+        return;
+    }
     if (error != QNetworkReply::NoError || bytes.isEmpty()) {
         setStatus(tr("Falló la descarga: %1").arg(errorText));
         return;
