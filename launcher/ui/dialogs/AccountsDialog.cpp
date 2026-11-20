@@ -25,6 +25,9 @@
 #include <qrcode/QrCodeGenerator.h>
 #include <QMessageBox>
 #include <QClipboard>
+#include <QInputDialog>
+#include <QGridLayout>
+#include <QRegExp>
 
 constexpr auto selectionFlags = QItemSelectionModel::Clear | QItemSelectionModel::Select | QItemSelectionModel::Rows | QItemSelectionModel::Current;
 
@@ -42,6 +45,40 @@ AccountsDialog::AccountsDialog(QWidget *parent, const QString& internalId) : QDi
     m_accounts = APPLICATION->accounts();
     ui->accountListView->setModel(m_accounts.get());
     ui->accountListView->setIconSize(QSize(48, 48));
+
+    // MENKIA local Alt Manager: offline profiles are stored in the same account list.
+    auto *localAccountButton = new QPushButton(tr("Add local profile"), this);
+    localAccountButton->setToolTip(tr("Create a local player profile without Microsoft authentication."));
+    if(auto *accountLayout = qobject_cast<QGridLayout *>(ui->mainView->layout())) {
+        accountLayout->addWidget(localAccountButton, 3, 0);
+    }
+    connect(localAccountButton, &QPushButton::clicked, this, [this]() {
+        bool accepted = false;
+        const QString name = QInputDialog::getText(this, tr("New local profile"),
+            tr("Player name (3–16 letters, numbers or underscores):"),
+            QLineEdit::Normal, QString(), &accepted).trimmed();
+        if(!accepted) return;
+        static const QRegExp validName("[A-Za-z0-9_]{3,16}");
+        if(!validName.exactMatch(name)) {
+            QMessageBox::warning(this, tr("Invalid player name"),
+                tr("Use 3–16 characters: A–Z, a–z, 0–9 or underscore."));
+            return;
+        }
+        MinecraftAccountPtr existing;
+        int existingRow = -1;
+        if(m_accounts->getAccountByProfileName(name, existing, existingRow)) {
+            ui->accountListView->selectionModel()->select(m_accounts->index(existingRow), selectionFlags);
+            m_accounts->setDefaultAccount(existing);
+            updateStates();
+            return;
+        }
+        auto localAccount = MinecraftAccount::createOfflineAccount(name);
+        if(!localAccount) return;
+        const QModelIndex added = m_accounts->addAccount(localAccount);
+        m_accounts->setDefaultAccount(localAccount);
+        ui->accountListView->selectionModel()->select(added, selectionFlags);
+        updateStates();
+    });
     m_capesModel = new CapesModel(this);
     ui->capesView->setModel(m_capesModel);
     m_skinsModel = APPLICATION->skinsModel().get();
@@ -394,6 +431,15 @@ void AccountsDialog::updateStates()
         }
         return;
     }
+
+    if(m_currentAccount->isOfflineAccount()) {
+        ui->accountPageStack->setCurrentWidget(ui->demoPage);
+        ui->selectedAccountLabel_Demo->setText(m_currentAccount->profileName() + tr(" — Local profile"));
+        ui->selectedAccountIconLabel_Demo->setIcon(APPLICATION->getThemedIcon("noaccount"));
+        ui->getMinecraftButton->setVisible(false);
+        return;
+    }
+    ui->getMinecraftButton->setVisible(true);
 
     if(m_currentAccount->accountState() == AccountState::Expired)
     {
