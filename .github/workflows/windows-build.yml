@@ -35,12 +35,22 @@ jobs:
           install: >-
             mingw-w64-x86_64-toolchain
             mingw-w64-x86_64-qt5-base
-            mingw-w64-x86_64-qt5-svg
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-ninja
             mingw-w64-x86_64-zlib
             mingw-w64-x86_64-openssl
             mingw-w64-x86_64-pkgconf
+
+      - name: Install Qt5Svg (with mirror fallback)
+        shell: msys2 {0}
+        run: |
+          if ! pacman -S --noconfirm --needed mingw-w64-x86_64-qt5-svg; then
+            curl -fL --retry 5 --retry-all-errors \
+              -o /tmp/qt5-svg.pkg.tar.zst \
+              "https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-qt5-svg-5.15.19%2Bkde%2Br5-1-any.pkg.tar.zst"
+            echo "7e7859ddd92ce65ad38c8ea2ab2917d33a211ce2cff43207f7cadc15c99a2d3e  /tmp/qt5-svg.pkg.tar.zst" | sha256sum -c -
+            pacman -U --noconfirm --nosignature /tmp/qt5-svg.pkg.tar.zst
+          fi
 
       - name: Configure MENKIA
         shell: msys2 {0}
