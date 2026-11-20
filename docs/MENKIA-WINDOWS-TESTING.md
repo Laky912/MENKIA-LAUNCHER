@@ -18,6 +18,19 @@ This checklist is for validating the packaged Windows build. A successful CI com
 - [ ] Confirm instance settings, notes, screenshots and logs pages open.
 - [ ] Confirm the launcher reports Java/runtime errors clearly instead of silently failing.
 
+## 3. Local profiles (Alt Manager)
+
+- [ ] Open Accounts and create two local profiles with different valid names.
+- [ ] Confirm each profile appears in the account list and can be selected independently.
+- [ ] Set each profile as the default in turn and confirm the default indicator follows the selection.
+- [ ] Close MENKIA completely, reopen it, and confirm both profiles and the selected default remain saved.
+- [ ] Launch a disposable offline-mode instance with each profile and verify the in-game player name.
+- [ ] Confirm local profiles do not start Microsoft OAuth or request token refresh.
+- [ ] Confirm Microsoft accounts can still be added and used normally.
+- [ ] Remove one local profile with Sign Out and confirm the other profile remains.
+
+Local profiles are offline identities only. They do not grant Minecraft ownership, Microsoft authentication, official skins/capes, or access to online-mode servers. Keep this distinction when interpreting test results.
+
 ## 3. Modrinth manager
 
 Use a disposable instance and back it up before testing installation.
