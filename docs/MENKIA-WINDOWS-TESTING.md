@@ -27,11 +27,13 @@ This checklist is for validating the packaged Windows build. A successful CI com
 - [ ] Launch a disposable offline-mode instance with each profile and verify the in-game player name.
 - [ ] Confirm local profiles do not start Microsoft OAuth or request token refresh.
 - [ ] Confirm Microsoft accounts can still be added and used normally.
+- [ ] Rename a local profile and confirm the updated nickname is saved after restarting MENKIA.
+- [ ] Confirm the rename warning explains that offline-mode servers may assign a different player identity.
 - [ ] Remove one local profile with Sign Out and confirm the other profile remains.
 
 Local profiles are offline identities only. They do not grant Minecraft ownership, Microsoft authentication, official skins/capes, or access to online-mode servers. Keep this distinction when interpreting test results.
 
-## 3. Modrinth manager
+## 4. Modrinth manager
 
 Use a disposable instance and back it up before testing installation.
 
@@ -46,7 +48,7 @@ Use a disposable instance and back it up before testing installation.
 - [ ] Confirm installation is blocked while the Minecraft instance is running.
 - [ ] Launch Minecraft and confirm the selected mod loads successfully.
 
-## 4. Compatibility matrix
+## 5. Compatibility matrix
 
 Test only combinations for which the selected loader and mod release actually exist.
 
@@ -61,7 +63,7 @@ Test only combinations for which the selected loader and mod release actually ex
 
 A project not published for a given Minecraft/loader combination is not a launcher failure.
 
-## 5. Known limitations — do not mark as passed by assumption
+## 6. Known limitations — do not mark as passed by assumption
 
 - The current quick buttons are Modrinth searches; they are not built-in HUD overlays.
 - Required mod dependencies are not installed automatically yet.
