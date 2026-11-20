@@ -82,7 +82,10 @@ MenkiaModsPage::MenkiaModsPage(MinecraftInstance *instance, QWidget *parent)
     });
     connect(m_install, &QPushButton::clicked, this, &MenkiaModsPage::installSelected);
     connect(&m_network, &QNetworkAccessManager::finished, this, [this](QNetworkReply *reply) {
-        if (reply != m_activeReply) return;
+        if (reply != m_activeReply) {
+            reply->deleteLater();
+            return;
+        }
         if (reply->property("menkia_stage").toString() == "search") onSearchFinished();
         else if (reply->property("menkia_stage").toString() == "versions") onVersionsFinished();
         else if (reply->property("menkia_stage").toString() == "download") onDownloadFinished();
@@ -130,8 +133,10 @@ void MenkiaModsPage::preset(const QString &term)
 void MenkiaModsPage::search()
 {
     if (m_activeReply) {
-        m_activeReply->abort();
+        auto *previousReply = m_activeReply;
         m_activeReply = nullptr;
+        previousReply->abort();
+        previousReply->deleteLater();
     }
     m_results->clear();
     const QString version = minecraftVersion();
@@ -202,6 +207,12 @@ void MenkiaModsPage::installSelected()
 
 void MenkiaModsPage::requestCompatibleVersion(const QString &projectId)
 {
+    if (m_activeReply) {
+        auto *previousReply = m_activeReply;
+        m_activeReply = nullptr;
+        previousReply->abort();
+        previousReply->deleteLater();
+    }
     QUrl url(QString("https://api.modrinth.com/v2/project/%1/version").arg(projectId));
     QUrlQuery query;
     query.addQueryItem("game_versions", QString("[\"%1\"]").arg(minecraftVersion()));
