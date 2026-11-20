@@ -119,7 +119,7 @@ public: /* queries */
     bool isActive() const;
 
     bool ownsMinecraft() const {
-        return data.minecraftEntitlement.ownsMinecraft || data.isOfflineAccount;
+        return data.minecraftEntitlement.ownsMinecraft;
     }
 
     bool hasProfile() const {
