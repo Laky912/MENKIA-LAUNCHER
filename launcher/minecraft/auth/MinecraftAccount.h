@@ -71,6 +71,8 @@ public: /* construction */
     explicit MinecraftAccount(QObject *parent = 0);
 
     static MinecraftAccountPtr createBlankMSA();
+    static MinecraftAccountPtr createOfflineAccount(const QString &playerName);
+    bool isOfflineAccount() const { return data.isOfflineAccount; }
 
     static MinecraftAccountPtr loadFromJsonV3(const QJsonObject &json);
 
@@ -117,7 +119,7 @@ public: /* queries */
     bool isActive() const;
 
     bool ownsMinecraft() const {
-        return data.minecraftEntitlement.ownsMinecraft;
+        return data.minecraftEntitlement.ownsMinecraft || data.isOfflineAccount;
     }
 
     bool hasProfile() const {
@@ -125,7 +127,7 @@ public: /* queries */
     }
 
     QString typeString() const {
-        return "msa";
+        return data.isOfflineAccount ? "offline" : "msa";
     }
 
     QPixmap getFace() const;
