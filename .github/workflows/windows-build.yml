@@ -58,6 +58,10 @@ jobs:
         shell: msys2 {0}
         run: cmake --build build --parallel 2
 
+      - name: Run MENKIA tests
+        shell: msys2 {0}
+        run: ctest --test-dir build --output-on-failure
+
       - name: Package MENKIA
         shell: msys2 {0}
         run: cmake --install build
